@@ -1,3 +1,4 @@
+//Include dependencies
 #include <wx/wx.h>
 #include <mathplot.h>
 #include "wx/notebook.h"
@@ -5,27 +6,17 @@
 
 #include <math.h>
 
+#include<rs232.h>
+
 #include "icon.xpm"
-
-
-/*
-class MySIN : public mpFX
-{
-double m_freq, m_amp;
-public:
-MySIN(double freq, double amp) : mpFX(wxT("f(x) = SIN(x)"), mpALIGN_LEFT) { m_freq = freq; m_amp = amp; m_drawOutsideMargins = false; }
-virtual double GetY(double x) { return m_amp * sin(2 * M_PI*m_freq*x); }
-virtual double GetMinY() { return -m_amp; }
-virtual double GetMaxY() { return  m_amp; }
-};
-*/
-
 
 wxDECLARE_EVENT(myEVT_THREAD_UPDATE, wxThreadEvent);
 
+//Create window (GUI) class
 class MyFrame : public wxFrame, public wxThreadHelper
 {
 public:
+	//Declare GUI's functions and events
 	MyFrame();
 	~MyFrame();
 	void OnThreadUpdate(wxThreadEvent& evt);
@@ -40,10 +31,10 @@ protected:
 	wxDECLARE_EVENT_TABLE();
 
 private:
+	//Declare GUI's variables
 	wxFrame * window;
 	wxGrid* m_data;
 	mpWindow* m_plot;
-	//char data = 'c';
 	std::vector<double> vectorx, vectory;
 	mpFXYVector* vectorLayer;
 	wxTextCtrl *displacement;
@@ -55,13 +46,14 @@ private:
 };
 
 //(indentor_app);
+//Create event table
 wxDEFINE_EVENT(myEVT_THREAD_UPDATE, wxThreadEvent);
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
 EVT_THREAD(myEVT_THREAD_UPDATE, MyFrame::OnThreadUpdate)
 EVT_CLOSE(MyFrame::OnClose)
 wxEND_EVENT_TABLE()
 
-MyFrame::MyFrame()
+MyFrame::MyFrame()//GUI's constructor
 {
 	window = new wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 750));
 	window->Fit();
@@ -133,7 +125,6 @@ MyFrame::MyFrame()
 	m_plot->SetMargins(50, 50, 50, 100);
 	m_plot->AddLayer(xaxis);
 	m_plot->AddLayer(yaxis);
-	//m_plot->AddLayer(new MySIN(1.0, 1.0));
 	m_plot->AddLayer(vectorLayer);
 
 	vectorLayer->SetData(vectorx, vectory);
@@ -161,7 +152,6 @@ MyFrame::MyFrame()
 
 	static const wxString label[] = { "Graph","Data" };
 	wxBoxSizer *control = new wxBoxSizer(wxVERTICAL);
-	//control->Add(new wxRadioBox(window, -1, "Data", wxDefaultPosition, wxDefaultSize, 2, label, 1, wxRA_SPECIFY_COLS), 0, wxALL, 10);
 	wxButton *cancel = new wxButton(window, -1, "Cancel");
 	wxButton *run = new wxButton(window, -1, "Run");
 	control->Add(new wxButton(window, -1, "Jog Indentor"), 0, wxALL, 10);
@@ -180,13 +170,14 @@ MyFrame::MyFrame()
 	window->SetSizerAndFit(topsizer);
 }
 
-MyFrame::~MyFrame()
+MyFrame::~MyFrame()//GUI's destructor
 {
 
 }
 
-wxThread::ExitCode MyFrame::Entry()
+wxThread::ExitCode MyFrame::Entry()//Background threads function
 {
+	//Gets data for graph and chart
 	wxThreadEvent evt(wxEVT_THREAD, myEVT_THREAD_UPDATE);
 	int p = -100;
 	while (1) {
@@ -199,37 +190,35 @@ wxThread::ExitCode MyFrame::Entry()
 			p++;
 			vectorx.push_back(((double)p - 50.0)*5.0);
 			vectory.push_back(0.0001*pow(((double)p - 50.0)*5.0, 3));
-			//m_data->SetCellValue(0, 0, data);
-			//data = 'd';
-			//wxThread::Sleep(500);
-			//vectorx.push_back(p);
-			//vectory.push_back(sin(p));
-			//this->Show();
-			//wxQueueEvent(this, evt.Clone());
+			unsigned char buff[4096];
+			RS232_PollComport(2, buff, 2095);
+			m_data->SetCellValue(0, 0, buff);
 		}
-		//break;
-		wxThread::Sleep(10);
+		wxThread::Sleep(500);
 		wxQueueEvent(this, evt.Clone());
 
 	}
 	return (wxThread::ExitCode)0;
 }
 
-void MyFrame::OnThreadUpdate(wxThreadEvent& evt)
+void MyFrame::OnThreadUpdate(wxThreadEvent& evt)//GUI event for when background function updates
 {
+	//Outputs data to graph
 	vectorLayer->SetData(vectorx, vectory);
 	m_plot->Fit();
-	//m_plot->AddLayer(vectorLayer);
 }
 
-void MyFrame::OnClose(wxCloseEvent&)
+void MyFrame::OnClose(wxCloseEvent&)//GUI close event
 {
+	//Closes thread and serial port
+	//Then closes GUI's window
 	if (GetThread() && GetThread()->IsRunning())
 		GetThread()->Wait();
+	RS232_CloseComport(2);
 	Destroy();
 }
 
-void MyFrame::StartAlongTask()
+void MyFrame::StartAlongTask()//Creates background thread
 {
 	if (CreateThread(wxTHREAD_JOINABLE) != wxTHREAD_NO_ERROR)
 	{
@@ -243,13 +232,14 @@ void MyFrame::StartAlongTask()
 	}
 }
 
-void MyFrame::Show()
+void MyFrame::Show()//Function that makes GUI's window visable
 {
 	window->Show();
 }
 
-void MyFrame::OnSettingButtonClicked(wxCommandEvent&)
+void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button press
 {
+	//Retreives inputed settings and output them to the screen for confirmation
 	wxString settingValues = displacement->GetValue();
 	settingValues.Append("mm displacement \n");
 	settingValues.Append(frequency->GetValue());
@@ -264,27 +254,33 @@ void MyFrame::OnSettingButtonClicked(wxCommandEvent&)
 	wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL);
 }
 
-void MyFrame::OnCancelButtonClicked(wxCommandEvent&)
+void MyFrame::OnCancelButtonClicked(wxCommandEvent&)//On cancel button pressed
 {
+	//Sets cacel to true to stop work thread from getting data
 	cancel = true;
 }
 
-void MyFrame::OnRunButtonClicked(wxCommandEvent&)
+void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button pressed
 {
+	//Creates background thread
 	this->StartAlongTask();
 	cancel = false;
 	vectorx.clear();
 	vectory.clear();
 }
 
-class indentor_app : public wxApp
+class indentor_app : public wxApp//Creates app class
 {
 public:
-	bool OnInit()
+	bool OnInit()//Start up function
 	{
+		//Creates GUI and opens serial port
 		MyFrame* frame = new MyFrame();
-		//frame->StartAlongTask();
 		frame->Show();
+		int port = 2;
+		int bdrate = 9600;
+		char mode[] = { '8','N','1',0 };
+		RS232_OpenComport(port, bdrate, mode);
 		return true;
 	}
 };

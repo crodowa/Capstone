@@ -21,9 +21,15 @@
     <ClCompile Include="..\..\wxMathPlot-0.1.2\mathplot.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\RS-232\rs232.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\wxMathPlot-0.1.2\mathplot.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\RS-232\rs232.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
