@@ -178,6 +178,8 @@ MyFrame::~MyFrame()//GUI's destructor
 wxThread::ExitCode MyFrame::Entry()//Background threads function
 {
 	//Gets data for graph and chart
+	//Right now it internally creates a array of data that continually updates the graph since no finished prototype
+	//Also recieves serial input and then  updates the first cell of the chart with the data
 	wxThreadEvent evt(wxEVT_THREAD, myEVT_THREAD_UPDATE);
 	int p = -100;
 	while (1) {
