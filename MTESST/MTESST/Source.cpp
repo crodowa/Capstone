@@ -35,7 +35,7 @@ private:
 	wxFrame * window;
 	wxGrid* m_data;
 	mpWindow* m_plot;
-	std::vector<double> vectorx, vectory;
+	std::vector<double> vectorTime, vectorDisplacement, vectorForce;
 	mpFXYVector* vectorLayer;
 	wxTextCtrl *displacement;
 	wxTextCtrl *frequency;
@@ -43,6 +43,14 @@ private:
 	wxTextCtrl *force;
 	wxTextCtrl *diameter;
 	bool cancel = false;
+	wxString IndentorMode ="StartUp";
+	wxString portMode = "Auto";
+	wxString settings = "|_\\";
+	int row = 0;
+	unsigned char buff[1];
+	int port = 0;
+	int bdrate = 256000;
+	char mode[4] = { '8','N','1',0 };
 };
 
 //(indentor_app);
@@ -65,11 +73,33 @@ MyFrame::MyFrame()//GUI's constructor
 	//Menu Creation
 	wxMenuBar* menuBar = new wxMenuBar();
 	wxMenu *fileMenu = new wxMenu();
-	fileMenu->Append(wxID_OPEN, _T("&Open"));
 	fileMenu->Append(wxID_SAVE, _T("&Save"));
 	fileMenu->AppendSeparator();
 	fileMenu->Append(wxID_EXIT, _T("&Quit"));
 	menuBar->Append(fileMenu, _T("&File"));
+	wxMenu *optionsMenu = new wxMenu();
+	wxMenu *IndentorConnection = new wxMenu();
+	IndentorConnection->Append(wxID_ANY,_T("Auto"));
+	wxMenu *ManualConnection = new wxMenu();
+	ManualConnection->Append(wxID_ANY, _T("Com1"));
+	ManualConnection->Append(wxID_ANY, _T("Com2"));
+	ManualConnection->Append(wxID_ANY, _T("Com3"));
+	ManualConnection->Append(wxID_ANY, _T("Com4"));
+	ManualConnection->Append(wxID_ANY, _T("Com5"));
+	ManualConnection->Append(wxID_ANY, _T("Com6"));
+	ManualConnection->Append(wxID_ANY, _T("Com7"));
+	ManualConnection->Append(wxID_ANY, _T("Com8"));
+	ManualConnection->Append(wxID_ANY, _T("Com9"));
+	ManualConnection->Append(wxID_ANY, _T("Com10"));
+	ManualConnection->Append(wxID_ANY, _T("Com11"));
+	ManualConnection->Append(wxID_ANY, _T("Com12"));
+	ManualConnection->Append(wxID_ANY, _T("Com13"));
+	ManualConnection->Append(wxID_ANY, _T("Com14"));
+	ManualConnection->Append(wxID_ANY, _T("Com15"));
+	ManualConnection->Append(wxID_ANY, _T("Com16"));
+	IndentorConnection->AppendSubMenu(ManualConnection, _T("Manual"));
+	optionsMenu->AppendSubMenu(IndentorConnection,_T("&Indentor Connection"));
+	menuBar->Append(optionsMenu, _T("&Options"));
 	wxMenu *helpMenu = new wxMenu();
 	helpMenu->Append(wxID_ABOUT, _T("&About"));
 	menuBar->Append(helpMenu, _T("&Help"));
@@ -127,7 +157,7 @@ MyFrame::MyFrame()//GUI's constructor
 	m_plot->AddLayer(yaxis);
 	m_plot->AddLayer(vectorLayer);
 
-	vectorLayer->SetData(vectorx, vectory);
+	vectorLayer->SetData(vectorTime, vectorDisplacement);
 	vectorLayer->SetContinuity(true);
 	wxPen vectorpen(*wxBLUE, 2, wxSOLID);
 	vectorLayer->SetPen(vectorpen);
@@ -135,7 +165,7 @@ MyFrame::MyFrame()//GUI's constructor
 
 	m_data = new wxGrid(notebook, -1, wxDefaultPosition, wxSize(500, 300));
 	m_data->CreateGrid(0, 0);
-	m_data->AppendRows(10);
+	//m_data->AppendRows(10);
 	m_data->AppendCols(3);
 	m_data->EnableEditing(false);
 	m_data->SetColLabelValue(0, "Time(s)");
@@ -181,24 +211,87 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 	//Right now it internally creates a array of data that continually updates the graph since no finished prototype
 	//Also recieves serial input and then  updates the first cell of the chart with the data
 	wxThreadEvent evt(wxEVT_THREAD, myEVT_THREAD_UPDATE);
-	int p = -100;
-	while (1) {
-		if (cancel == true)
-		{
-			break;
+	while (!GetThread()->TestDestroy()) {
+		if (IndentorMode == "StartUp"&&portMode=="Auto") {
+			try{
+				int error=RS232_OpenComport(port, bdrate, mode);
+				if (error == 1) {
+					throw std::exception();
+				}
+				else {
+					int serialReturned = 0;
+					wxLongLong time = wxGetLocalTimeMillis();
+					do {
+						serialReturned = RS232_PollComport(port, buff, 1);
+					} while (serialReturned == 0 && wxGetLocalTimeMillis()-time<2000);
+					if (buff[0] ==(unsigned char) '1') {
+						RS232_SendBuf(port,(unsigned char *)"1",1);
+						IndentorMode = "Idle";
+					}
+					else {
+						RS232_CloseComport(port);
+						port++;
+					}
+				}
+			}
+			catch (std::exception& e) {
+				if (port == 15) {
+					port = 0;
+				}
+				else {
+					port++;
+				}
+			}
 		}
-		else if (!GetThread()->TestDestroy())
-		{
-			p++;
-			vectorx.push_back(((double)p - 50.0)*5.0);
-			vectory.push_back(0.0001*pow(((double)p - 50.0)*5.0, 3));
-			unsigned char buff[4096];
-			RS232_PollComport(2, buff, 2095);
-			m_data->SetCellValue(0, 0, buff);
-		}
-		wxThread::Sleep(500);
-		wxQueueEvent(this, evt.Clone());
+		else if (IndentorMode == "StartUp"&&portMode == "Manual") {
 
+		}
+		else if (IndentorMode == "Run") {
+			RS232_PollComport(port, buff, 1);
+			if (buff[0] == '|') {
+				int i = 0;
+				wxString data[3];
+				double value;
+				do {
+					RS232_PollComport(port, buff, 1);
+					if (buff[0] != '_' && buff[0]!='\\') {
+						data[i].Append(buff[0]);
+					}
+					else {
+						i++;
+					}
+				}while(buff[0] != '\\');
+				m_data->AppendRows(1);
+				data[0].ToDouble(&value);
+				vectorTime.push_back(value);
+				m_data->SetCellValue(row, 0, data[0]);
+				data[1].ToDouble(&value);
+				//vectorDisplacement.push_back(value);
+				//m_data->SetCellValue(row, 1, data[1]);
+				data[2].ToDouble(&value);
+				//vectorForce.push_back(value);
+				//m_data->SetCellValue(row, 2, data[2]);
+				//vectorLayer->SetData(vectorTime, vectorDisplacement);
+				m_plot->Fit();
+				row++;
+			}
+		}
+		else if (IndentorMode == "SendSettings") {
+			RS232_SendBuf(port,(unsigned char*)(settings.mb_str()).data(), 10);
+			IndentorMode = "Idle";
+		}
+		else if (IndentorMode == "START") {
+			RS232_SendBuf(port, (unsigned char*)"/START\\", 10);
+			IndentorMode = "Run";
+		}
+		else if (IndentorMode == "STOP") {
+			RS232_SendBuf(port, (unsigned char*)"$", 10);
+			IndentorMode = "Idle";
+		}
+		else {
+
+		}
+		wxThread::Sleep(50);
 	}
 	return (wxThread::ExitCode)0;
 }
@@ -206,7 +299,7 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 void MyFrame::OnThreadUpdate(wxThreadEvent& evt)//GUI event for when background function updates
 {
 	//Outputs data to graph
-	vectorLayer->SetData(vectorx, vectory);
+	vectorLayer->SetData(vectorTime, vectorDisplacement);
 	m_plot->Fit();
 }
 
@@ -216,7 +309,7 @@ void MyFrame::OnClose(wxCloseEvent&)//GUI close event
 	//Then closes GUI's window
 	if (GetThread() && GetThread()->IsRunning())
 		GetThread()->Wait();
-	RS232_CloseComport(2);
+	RS232_CloseComport(port);
 	Destroy();
 }
 
@@ -254,21 +347,33 @@ void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button
 	settingValues.Append("mm diameter tip");
 
 	wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL);
+
+	settings = "|";
+	settings.Append(cycles->GetValue());
+	settings.Append("_");
+	settings.Append(displacement->GetValue());
+	settings.Append("\\");
+	IndentorMode = "SendSettings";
 }
 
 void MyFrame::OnCancelButtonClicked(wxCommandEvent&)//On cancel button pressed
 {
-	//Sets cacel to true to stop work thread from getting data
+	//Sets cancel to true to stop work thread from getting data
 	cancel = true;
 }
 
 void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button pressed
 {
-	//Creates background thread
-	this->StartAlongTask();
-	cancel = false;
-	vectorx.clear();
-	vectory.clear();
+	if (settings != "|_\\") {
+		row = 0;
+		vectorTime.clear();
+		vectorDisplacement.clear();
+		vectorForce.clear();
+		IndentorMode = "START";
+	}
+	else {
+		wxMessageBox("Please Enter Valid Settings", "Error", wxOK|wxICON_ERROR);
+	}
 }
 
 class indentor_app : public wxApp//Creates app class
@@ -276,13 +381,10 @@ class indentor_app : public wxApp//Creates app class
 public:
 	bool OnInit()//Start up function
 	{
-		//Creates GUI and opens serial port
+		//Creates GUI and opens serial port and creates background thread
 		MyFrame* frame = new MyFrame();
 		frame->Show();
-		int port = 2;
-		int bdrate = 9600;
-		char mode[] = { '8','N','1',0 };
-		RS232_OpenComport(port, bdrate, mode);
+		frame->StartAlongTask();
 		return true;
 	}
 };
