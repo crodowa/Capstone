@@ -12,6 +12,91 @@
 
 wxDECLARE_EVENT(myEVT_THREAD_UPDATE, wxThreadEvent);
 
+class indentorTable : public wxGridTableBase
+{
+protected:
+	int rows;
+	int cols;
+	std::vector< std::vector<double> >data;
+	std::vector<wxString>columnLabels;
+public:
+	indentorTable() { rows = 0; cols = 0; };
+	virtual ~indentorTable();
+	virtual int GetNumberRows() wxOVERRIDE;
+	virtual int GetNumberCols() wxOVERRIDE;
+	virtual bool AppendRows(size_t numRow) wxOVERRIDE;
+	virtual bool AppendCols(size_t numCol) wxOVERRIDE;
+	virtual wxString GetValue(int row, int col) wxOVERRIDE;
+	virtual void SetValue(int row, int col, const wxString& value) wxOVERRIDE;
+	virtual void SetColLabelValue(int numCol, const wxString& label) wxOVERRIDE;
+};
+
+indentorTable::~indentorTable()
+{
+	for (size_t i = 0; i < rows; i++) {
+		data[i].clear();
+	}
+	data.clear();
+}
+int indentorTable::GetNumberRows()
+{
+	return rows;
+}
+
+int indentorTable::GetNumberCols()
+{
+	return cols;
+}
+
+wxString indentorTable::GetValue(int row, int col)
+{
+	if (row > -1 && row<rows && col>-1 && col < cols) {
+		return wxString::Format(wxT("%f"), data[row][col]);
+	}
+}
+
+void indentorTable::SetValue(int row, int col, const wxString& value)
+{
+	double val;
+	value.ToDouble(&val);
+	if (row<rows && row>-1 && col<cols && col>-1)
+	{
+		data[row][col] = val;
+	}
+}
+
+bool indentorTable::AppendRows(size_t numRow)
+{
+	for (size_t i = 0; i < numRow; i++) {
+		data.push_back(std::vector<double>());
+		for (size_t j = 0; j < cols; j++) {
+			data[rows+i].push_back(0);
+		}
+	}
+	rows += numRow;
+	wxGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_ROWS_APPENDED, numRow);
+	return GetView()->ProcessTableMessage(msg);
+}
+bool indentorTable::AppendCols(size_t numCol)
+{
+	for (int i = 0; i < numCol; i++) {
+		columnLabels.push_back("");
+		for (size_t j = 0; j < rows; j++) {
+			data[j].push_back(0);
+		}
+	}
+	cols += numCol;
+	wxGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_COLS_APPENDED, numCol);
+	return GetView()->ProcessTableMessage(msg);
+}
+
+void indentorTable::SetColLabelValue(int numCol, const wxString& label)
+{
+	if (numCol < columnLabels.size())
+		columnLabels[numCol] = label;
+}
+
+
 //Create window (GUI) class
 class MyFrame : public wxFrame, public wxThreadHelper
 {
@@ -164,8 +249,12 @@ MyFrame::MyFrame()//GUI's constructor
 	vectorLayer->SetDrawOutsideMargins(false);
 
 	m_data = new wxGrid(notebook, -1, wxDefaultPosition, wxSize(500, 300));
-	m_data->CreateGrid(0, 0);
-	//m_data->AppendRows(10);
+	//m_data->CreateGrid(0, 0);
+	//Stuff
+	indentorTable *table = new indentorTable();
+	m_data->SetTable(table, true);
+	//Stuff
+	//m_data->AppendRows(1000);
 	m_data->AppendCols(3);
 	m_data->EnableEditing(false);
 	m_data->SetColLabelValue(0, "Time(s)");
@@ -247,33 +336,46 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 
 		}
 		else if (IndentorMode == "Run") {
-			RS232_PollComport(port, buff, 1);
+			if(buff[0]!='|')
+				RS232_PollComport(port, buff, 1);
 			if (buff[0] == '|') {
 				int i = 0;
-				wxString data[3];
+				wxString data[3] = {};
+				long time;
 				double value;
+				bool valid = true;
 				do {
-					RS232_PollComport(port, buff, 1);
-					if (buff[0] != '_' && buff[0]!='\\') {
-						data[i].Append(buff[0]);
-					}
-					else {
-						i++;
+					int amountSerialRecieved=RS232_PollComport(port, buff, 1);
+					if (amountSerialRecieved != 0) {
+						if ((buff[0] < 58 && buff[0]>28) || buff[0] == 46 || buff[0]==45) {
+							data[i].Append(buff[0]);
+						}
+						else if (buff[0] == '_') {
+							i++;
+						}
+						else if (buff[0] != '\\') {
+							valid = false;
+							break;
+						}
 					}
 				}while(buff[0] != '\\');
-				m_data->AppendRows(1);
-				data[0].ToDouble(&value);
-				vectorTime.push_back(value);
-				m_data->SetCellValue(row, 0, data[0]);
-				data[1].ToDouble(&value);
-				//vectorDisplacement.push_back(value);
-				//m_data->SetCellValue(row, 1, data[1]);
-				data[2].ToDouble(&value);
-				//vectorForce.push_back(value);
-				//m_data->SetCellValue(row, 2, data[2]);
-				//vectorLayer->SetData(vectorTime, vectorDisplacement);
-				m_plot->Fit();
-				row++;
+				if (valid == true) {
+					if (row > 460)
+						row = row;
+					m_data->AppendRows(1);
+					data[0].ToLong(&time);
+					vectorTime.push_back((time/1000));
+					m_data->SetCellValue(row, 0, data[0]);
+					data[1].ToDouble(&value);
+					vectorDisplacement.push_back(value);
+					m_data->SetCellValue(row, 1, data[1]);
+					data[2].ToDouble(&value);
+					vectorForce.push_back(value);
+					m_data->SetCellValue(row, 2, data[2]);
+					vectorLayer->SetData(vectorTime, vectorDisplacement);
+					m_plot->Fit();
+					row++;
+				}
 			}
 		}
 		else if (IndentorMode == "SendSettings") {
@@ -291,7 +393,7 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 		else {
 
 		}
-		wxThread::Sleep(50);
+		wxThread::Sleep(0);
 	}
 	return (wxThread::ExitCode)0;
 }
@@ -358,8 +460,7 @@ void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button
 
 void MyFrame::OnCancelButtonClicked(wxCommandEvent&)//On cancel button pressed
 {
-	//Sets cancel to true to stop work thread from getting data
-	cancel = true;
+	IndentorMode = "STOP";
 }
 
 void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button pressed
