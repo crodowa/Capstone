@@ -29,6 +29,7 @@ public:
 	virtual wxString GetValue(int row, int col) wxOVERRIDE;
 	virtual void SetValue(int row, int col, const wxString& value) wxOVERRIDE;
 	virtual void SetColLabelValue(int numCol, const wxString& label) wxOVERRIDE;
+	virtual wxString GetColLabelValue(int numCol) wxOVERRIDE;
 };
 
 indentorTable::~indentorTable()
@@ -80,7 +81,7 @@ bool indentorTable::AppendRows(size_t numRow)
 bool indentorTable::AppendCols(size_t numCol)
 {
 	for (int i = 0; i < numCol; i++) {
-		columnLabels.push_back("");
+		columnLabels.push_back(wxGridTableBase::GetColLabelValue(i));
 		for (size_t j = 0; j < rows; j++) {
 			data[j].push_back(0);
 		}
@@ -94,6 +95,10 @@ void indentorTable::SetColLabelValue(int numCol, const wxString& label)
 {
 	if (numCol < columnLabels.size())
 		columnLabels[numCol] = label;
+}
+wxString indentorTable :: GetColLabelValue(int numCol)
+{
+	return columnLabels[numCol];
 }
 
 
@@ -249,12 +254,8 @@ MyFrame::MyFrame()//GUI's constructor
 	vectorLayer->SetDrawOutsideMargins(false);
 
 	m_data = new wxGrid(notebook, -1, wxDefaultPosition, wxSize(500, 300));
-	//m_data->CreateGrid(0, 0);
-	//Stuff
 	indentorTable *table = new indentorTable();
 	m_data->SetTable(table, true);
-	//Stuff
-	//m_data->AppendRows(1000);
 	m_data->AppendCols(3);
 	m_data->EnableEditing(false);
 	m_data->SetColLabelValue(0, "Time(s)");
@@ -333,7 +334,18 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 			}
 		}
 		else if (IndentorMode == "StartUp"&&portMode == "Manual") {
+			try {
+				int error = RS232_OpenComport(port, bdrate, mode);
+				if (error == 1) {
+					throw std::exception();
+				}
+				else {
+					IndentorMode = "Idle";
+				}
+			}
+			catch (std::exception& e) {
 
+			}
 		}
 		else if (IndentorMode == "Run") {
 			if(buff[0]!='|')
@@ -347,24 +359,24 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 				do {
 					int amountSerialRecieved=RS232_PollComport(port, buff, 1);
 					if (amountSerialRecieved != 0) {
-						if ((buff[0] < 58 && buff[0]>28) || buff[0] == 46 || buff[0]==45) {
+						if (((buff[0] < 58 && buff[0]>28) || buff[0] == 46 || buff[0]==45) && i<3) {
 							data[i].Append(buff[0]);
 						}
 						else if (buff[0] == '_') {
 							i++;
 						}
-						else if (buff[0] != '\\') {
+						else if (buff[0] != '\\' || i>=3) {
 							valid = false;
 							break;
 						}
 					}
 				}while(buff[0] != '\\');
+				if (data[0] == "" || data[1] == "" || data[2] == "")
+					valid = false;
 				if (valid == true) {
-					if (row > 460)
-						row = row;
 					m_data->AppendRows(1);
 					data[0].ToLong(&time);
-					vectorTime.push_back((time/1000));
+					vectorTime.push_back(((double)time/1000));
 					m_data->SetCellValue(row, 0, data[0]);
 					data[1].ToDouble(&value);
 					vectorDisplacement.push_back(value);
@@ -379,7 +391,7 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 			}
 		}
 		else if (IndentorMode == "SendSettings") {
-			RS232_SendBuf(port,(unsigned char*)(settings.mb_str()).data(), 10);
+			RS232_SendBuf(port,(unsigned char*)(settings.mb_str()).data(), 20);
 			IndentorMode = "Idle";
 		}
 		else if (IndentorMode == "START") {
