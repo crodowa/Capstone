@@ -21,6 +21,7 @@ protected:
 	std::vector<wxString>columnLabels;
 public:
 	indentorTable() { rows = 0; cols = 0; };
+	indentorTable(const indentorTable&copy);
 	virtual ~indentorTable();
 	virtual int GetNumberRows() wxOVERRIDE;
 	virtual int GetNumberCols() wxOVERRIDE;
@@ -30,7 +31,15 @@ public:
 	virtual void SetValue(int row, int col, const wxString& value) wxOVERRIDE;
 	virtual void SetColLabelValue(int numCol, const wxString& label) wxOVERRIDE;
 	virtual wxString GetColLabelValue(int numCol) wxOVERRIDE;
+	bool EmptyGrid();
 };
+
+indentorTable::indentorTable(const indentorTable&copy)
+{
+	columnLabels = copy.columnLabels;
+	rows = copy.rows;
+	cols = copy.cols;
+}
 
 indentorTable::~indentorTable()
 {
@@ -38,6 +47,7 @@ indentorTable::~indentorTable()
 		data[i].clear();
 	}
 	data.clear();
+	columnLabels.clear();
 }
 int indentorTable::GetNumberRows()
 {
@@ -100,6 +110,16 @@ wxString indentorTable :: GetColLabelValue(int numCol)
 {
 	return columnLabels[numCol];
 }
+bool indentorTable::EmptyGrid()
+{
+	for (size_t i = 0; i < rows; i++) {
+		data[i].clear();
+	}
+	data.clear();
+	wxGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_ROWS_DELETED,0, rows);
+	rows = 0;
+	return GetView()->ProcessTableMessage(msg);
+}
 
 
 //Create window (GUI) class
@@ -147,8 +167,8 @@ private:
 //Create event table
 wxDEFINE_EVENT(myEVT_THREAD_UPDATE, wxThreadEvent);
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
-EVT_THREAD(myEVT_THREAD_UPDATE, MyFrame::OnThreadUpdate)
-EVT_CLOSE(MyFrame::OnClose)
+	EVT_THREAD(myEVT_THREAD_UPDATE, MyFrame::OnThreadUpdate)
+	EVT_CLOSE(MyFrame::OnClose)
 wxEND_EVENT_TABLE()
 
 MyFrame::MyFrame()//GUI's constructor
@@ -259,8 +279,8 @@ MyFrame::MyFrame()//GUI's constructor
 	m_data->AppendCols(3);
 	m_data->EnableEditing(false);
 	m_data->SetColLabelValue(0, "Time(s)");
-	m_data->SetColLabelValue(1, "Force(mN)");
-	m_data->SetColLabelValue(2, "Displacement(mm)");
+	m_data->SetColLabelValue(1, "Displacement(mm)");
+	m_data->SetColLabelValue(2, "Force(mN)");
 	m_data->Fit();
 
 	notebook->AddPage(m_plot, wxT("Gragh"));
@@ -403,7 +423,7 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 			IndentorMode = "Idle";
 		}
 		else {
-
+			RS232_flushRXTX(port);
 		}
 		wxThread::Sleep(0);
 	}
@@ -417,7 +437,7 @@ void MyFrame::OnThreadUpdate(wxThreadEvent& evt)//GUI event for when background 
 	m_plot->Fit();
 }
 
-void MyFrame::OnClose(wxCloseEvent&)//GUI close event
+void MyFrame::OnClose(wxCloseEvent& event)//GUI close event
 {
 	//Closes thread and serial port
 	//Then closes GUI's window
@@ -460,14 +480,14 @@ void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button
 	settingValues.Append(diameter->GetValue());
 	settingValues.Append("mm diameter tip");
 
-	wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL);
-
-	settings = "|";
-	settings.Append(cycles->GetValue());
-	settings.Append("_");
-	settings.Append(displacement->GetValue());
-	settings.Append("\\");
-	IndentorMode = "SendSettings";
+	if(wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL)==wxOK){
+		settings = "|";
+		settings.Append(cycles->GetValue());
+		settings.Append("_");
+		settings.Append(displacement->GetValue());
+		settings.Append("\\");
+		IndentorMode = "SendSettings";
+	}
 }
 
 void MyFrame::OnCancelButtonClicked(wxCommandEvent&)//On cancel button pressed
@@ -482,6 +502,7 @@ void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button presse
 		vectorTime.clear();
 		vectorDisplacement.clear();
 		vectorForce.clear();
+		dynamic_cast<indentorTable *>(m_data->GetTable())->EmptyGrid();
 		IndentorMode = "START";
 	}
 	else {
