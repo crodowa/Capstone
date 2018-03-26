@@ -4,14 +4,15 @@
 #include "wx/notebook.h"
 #include <wx/grid.h>
 
+#include<wx/numformatter.h>
+
 #include <math.h>
 
 #include<rs232.h>
 
 #include "icon.xpm"
 
-wxDECLARE_EVENT(myEVT_THREAD_UPDATE, wxThreadEvent);
-
+//Indentor Table class
 class indentorTable : public wxGridTableBase
 {
 protected:
@@ -40,7 +41,6 @@ indentorTable::indentorTable(const indentorTable&copy)
 	rows = copy.rows;
 	cols = copy.cols;
 }
-
 indentorTable::~indentorTable()
 {
 	for (size_t i = 0; i < rows; i++) {
@@ -53,19 +53,17 @@ int indentorTable::GetNumberRows()
 {
 	return rows;
 }
-
 int indentorTable::GetNumberCols()
 {
 	return cols;
 }
-
 wxString indentorTable::GetValue(int row, int col)
 {
 	if (row > -1 && row<rows && col>-1 && col < cols) {
-		return wxString::Format(wxT("%f"), data[row][col]);
+		//return wxString::Format(wxT("%0.4f"), data[row][col]);
+		return wxNumberFormatter::ToString(data[row][col],10,0x02);
 	}
 }
-
 void indentorTable::SetValue(int row, int col, const wxString& value)
 {
 	double val;
@@ -75,7 +73,6 @@ void indentorTable::SetValue(int row, int col, const wxString& value)
 		data[row][col] = val;
 	}
 }
-
 bool indentorTable::AppendRows(size_t numRow)
 {
 	for (size_t i = 0; i < numRow; i++) {
@@ -100,7 +97,6 @@ bool indentorTable::AppendCols(size_t numCol)
 	wxGridTableMessage msg(this, wxGRIDTABLE_NOTIFY_COLS_APPENDED, numCol);
 	return GetView()->ProcessTableMessage(msg);
 }
-
 void indentorTable::SetColLabelValue(int numCol, const wxString& label)
 {
 	if (numCol < columnLabels.size())
@@ -121,23 +117,44 @@ bool indentorTable::EmptyGrid()
 	return GetView()->ProcessTableMessage(msg);
 }
 
+//serial thread class
+class serialThread :public wxThreadHelper
+{
+public:
+	virtual wxThread::ExitCode EntrySerial()=0;
+	wxThread* StartAlongTaskSerial();
+protected:
+	virtual wxThread::ExitCode Entry() { return(this->EntrySerial()); };
+};
+
+//data thread class
+class dataThread :public wxThreadHelper
+{
+public:
+	virtual wxThread::ExitCode EntryData() = 0;
+	wxThread* StartAlongTaskData();
+protected:
+	virtual wxThread::ExitCode Entry() { return(this->EntryData()); };
+};
+
 
 //Create window (GUI) class
-class MyFrame : public wxFrame, public wxThreadHelper
+class MyFrame : public wxFrame, public serialThread,public dataThread
 {
 public:
 	//Declare GUI's functions and events
 	MyFrame();
 	~MyFrame();
-	void OnThreadUpdate(wxThreadEvent& evt);
 	void OnClose(wxCloseEvent& evt);
-	void StartAlongTask();
+	void StartAlongTask() {serial = StartAlongTaskSerial();data = StartAlongTaskData(); };
 	void Show();
 	void OnSettingButtonClicked(wxCommandEvent&);
 	void OnRunButtonClicked(wxCommandEvent&);
 	void OnCancelButtonClicked(wxCommandEvent&);
+	void OnJogButtonClicked(wxCommandEvent&);
 protected:
-	virtual wxThread::ExitCode Entry();
+	virtual wxThread::ExitCode EntrySerial() wxOVERRIDE;
+	virtual wxThread::ExitCode EntryData() wxOVERRIDE;
 	wxDECLARE_EVENT_TABLE();
 
 private:
@@ -145,14 +162,17 @@ private:
 	wxFrame * window;
 	wxGrid* m_data;
 	mpWindow* m_plot;
+	mpWindow* m_plot2;
+	mpWindow* m_plot3;
 	std::vector<double> vectorTime, vectorDisplacement, vectorForce;
 	mpFXYVector* vectorLayer;
+	mpFXYVector* vectorLayer2;
+	mpFXYVector* vectorLayer3;
 	wxTextCtrl *displacement;
 	wxTextCtrl *frequency;
 	wxTextCtrl *cycles;
 	wxTextCtrl *force;
 	wxTextCtrl *diameter;
-	bool cancel = false;
 	wxString IndentorMode ="StartUp";
 	wxString portMode = "Auto";
 	wxString settings = "|_\\";
@@ -161,13 +181,18 @@ private:
 	int port = 0;
 	int bdrate = 256000;
 	char mode[4] = { '8','N','1',0 };
+	wxThread* serial;
+	wxThread* data;
+	bool clearing = false;
+
+	wxNotebook *notebook;
+	wxRadioBox *jogMode;
+	wxRadioBox *jogDirection;
 };
 
 //(indentor_app);
 //Create event table
-wxDEFINE_EVENT(myEVT_THREAD_UPDATE, wxThreadEvent);
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
-	EVT_THREAD(myEVT_THREAD_UPDATE, MyFrame::OnThreadUpdate)
 	EVT_CLOSE(MyFrame::OnClose)
 wxEND_EVENT_TABLE()
 
@@ -175,7 +200,7 @@ MyFrame::MyFrame()//GUI's constructor
 {
 	window = new wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 750));
 	window->Fit();
-	wxIcon *icon = new wxIcon(_e0968bce85d4723c058a9ee8c33f35c);
+	wxIcon *icon = new wxIcon(_521760424741);
 	window->SetIcon(*icon);
 
 	//End of window creation
@@ -226,37 +251,40 @@ MyFrame::MyFrame()//GUI's constructor
 	settings->Add(new wxStaticText(window, -1, "Enter Desired Displacement(mm):"), 0, wxALL, 12);
 	settings->Add(displacement, 0, wxALL, 10);
 
-	frequency = new wxTextCtrl(window, -1);
-	settings->Add(new wxStaticText(window, -1, "Enter Desired Frequency(Hz):"), 0, wxALL, 12);
-	settings->Add(frequency, 0, wxALL, 10);
+	//frequency = new wxTextCtrl(window, -1);
+	//settings->Add(new wxStaticText(window, -1, "Enter Desired Frequency(Hz):"), 0, wxALL, 12);
+	//settings->Add(frequency, 0, wxALL, 10);
 
 	cycles = new wxTextCtrl(window, -1);
 	settings->Add(new wxStaticText(window, -1, "Enter Desired Number of Cycles:"), 0, wxALL, 12);
 	settings->Add(cycles, 0, wxALL, 10);
 
-	wxBoxSizer *settings2 = new wxBoxSizer(wxHORIZONTAL);
+	//wxBoxSizer *settings2 = new wxBoxSizer(wxHORIZONTAL);
 
-	force = new wxTextCtrl(window, -1);
-	settings2->Add(new wxStaticText(window, -1, "Enter Max Allowable Force(N):      "), 0, wxALL, 12);
-	settings2->Add(force, 0, wxALL, 10);
+	//force = new wxTextCtrl(window, -1);
+	//settings2->Add(new wxStaticText(window, -1, "Enter Max Allowable Force(N):      "), 0, wxALL, 12);
+	//settings2->Add(force, 0, wxALL, 10);
 
-	diameter = new wxTextCtrl(window, -1);
-	settings2->Add(new wxStaticText(window, -1, "Enter Tip Diameter(mm):       "), 0, wxALL, 12);
-	settings2->Add(diameter, 0, wxALL, 10);
+	//diameter = new wxTextCtrl(window, -1);
+	//settings2->Add(new wxStaticText(window, -1, "Enter Tip Diameter(mm):       "), 0, wxALL, 12);
+	//settings2->Add(diameter, 0, wxALL, 10);
 
 	wxButton *settingsbut = new wxButton(window, -1, "Enter Settings");
-	settings2->Add(settingsbut, 0, wxALL, 10);
+	//settings2->Add(settingsbut, 0, wxALL, 10);
+	settings->Add(settingsbut, 0, wxALL, 10);
 	settingsbut->Bind(wxEVT_BUTTON, &MyFrame::OnSettingButtonClicked, this);
 	//End of settings
 
 	//Start of Graph and text panel
-	wxNotebook *notebook = new wxNotebook(window, wxID_ANY);
+	//wxNotebook *notebook = new wxNotebook(window, wxID_ANY);
+	notebook = new wxNotebook(window, wxID_ANY);
 	wxBoxSizer *data = new wxBoxSizer(wxHORIZONTAL);
 
+	//Displacement vs Time
 	wxFont graphFont(11, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
 	m_plot = new mpWindow(notebook, -1, wxDefaultPosition, wxSize(500, 300), wxSUNKEN_BORDER);
-	mpScaleX* xaxis = new mpScaleX(wxT("X"), mpALIGN_BOTTOM, true, mpX_NORMAL);
-	mpScaleY* yaxis = new mpScaleY(wxT("Y"), mpALIGN_LEFT, true);
+	mpScaleX* xaxis = new mpScaleX(wxT("Time"), mpALIGN_BOTTOM, true, mpX_NORMAL);
+	mpScaleY* yaxis = new mpScaleY(wxT("Displacement"), mpALIGN_LEFT, true);
 	vectorLayer = new mpFXYVector(_("Vector"));
 	xaxis->SetFont(graphFont);
 	yaxis->SetFont(graphFont);
@@ -273,6 +301,49 @@ MyFrame::MyFrame()//GUI's constructor
 	vectorLayer->SetPen(vectorpen);
 	vectorLayer->SetDrawOutsideMargins(false);
 
+	//Force vs Time
+	m_plot2 = new mpWindow(notebook, -1, wxDefaultPosition, wxSize(500, 300), wxSUNKEN_BORDER);
+	
+	vectorLayer2 = new mpFXYVector(_("Vector"));
+	mpScaleX* xaxis2 = new mpScaleX(wxT("Time"), mpALIGN_BOTTOM, true, mpX_NORMAL);
+	mpScaleY* yaxis2 = new mpScaleY(wxT("Force"), mpALIGN_LEFT, true);
+	xaxis2->SetFont(graphFont);
+	yaxis2->SetFont(graphFont);
+	xaxis2->SetDrawOutsideMargins(false);
+	yaxis2->SetDrawOutsideMargins(false);
+	m_plot2->SetMargins(50, 50, 50, 100);
+	m_plot2->AddLayer(xaxis2);
+	m_plot2->AddLayer(yaxis2);
+	m_plot2->AddLayer(vectorLayer2);
+
+	vectorLayer2->SetData(vectorTime, vectorForce);
+	vectorLayer2->SetContinuity(true);
+	vectorLayer2->SetPen(vectorpen);
+	vectorLayer2->SetDrawOutsideMargins(false);
+	
+
+
+	//Force vs Displacement
+	m_plot3 = new mpWindow(notebook, -1, wxDefaultPosition, wxSize(500, 300), wxSUNKEN_BORDER);
+	
+	vectorLayer3 = new mpFXYVector(_("Vector"));
+	mpScaleX* xaxis3 = new mpScaleX(wxT("Displacement"), mpALIGN_BOTTOM, true, mpX_NORMAL);
+	mpScaleY* yaxis3 = new mpScaleY(wxT("Force"), mpALIGN_LEFT, true);
+	xaxis3->SetFont(graphFont);
+	yaxis3->SetFont(graphFont);
+	xaxis3->SetDrawOutsideMargins(false);
+	yaxis3->SetDrawOutsideMargins(false);
+	m_plot3->SetMargins(50, 50, 50, 100);
+	m_plot3->AddLayer(xaxis3);
+	m_plot3->AddLayer(yaxis3);
+	m_plot3->AddLayer(vectorLayer3);
+
+	vectorLayer3->SetData(vectorDisplacement, vectorForce);
+	vectorLayer3->SetContinuity(true);
+	vectorLayer3->SetPen(vectorpen);
+	vectorLayer3->SetDrawOutsideMargins(false);
+	
+
 	m_data = new wxGrid(notebook, -1, wxDefaultPosition, wxSize(500, 300));
 	indentorTable *table = new indentorTable();
 	m_data->SetTable(table, true);
@@ -283,28 +354,37 @@ MyFrame::MyFrame()//GUI's constructor
 	m_data->SetColLabelValue(2, "Force(mN)");
 	m_data->Fit();
 
-	notebook->AddPage(m_plot, wxT("Gragh"));
-	notebook->AddPage(m_data, wxT("Text"));
+	notebook->AddPage(m_plot, wxT("Displacement vs Time"));
+	notebook->AddPage(m_plot2, wxT("Force vs Time"));
+	notebook->AddPage(m_plot3, wxT("Force vs Displacement"));
+	notebook->AddPage(m_data, wxT("Table"));
 	data->Add(notebook, 1, wxGROW | wxALL, 10);
 	//End of Graph and text panel
 
 	//Start of Control Buttons (not include setting button)
 
-	static const wxString label[] = { "Graph","Data" };
+	static const wxString label[] = { "Up","Down"};
+	static const wxString label2[] = { "0.01mm","0.1mm","1mm" };
 	wxBoxSizer *control = new wxBoxSizer(wxVERTICAL);
 	wxButton *cancel = new wxButton(window, -1, "Cancel");
 	wxButton *run = new wxButton(window, -1, "Run");
-	control->Add(new wxButton(window, -1, "Jog Indentor"), 0, wxALL, 10);
+	jogDirection= new wxRadioBox(window, -1, "Jog Direction", wxDefaultPosition, wxDefaultSize, 2, label, 1);
+	jogMode = new wxRadioBox(window, -1, "Jog Step", wxDefaultPosition, wxDefaultSize, 3, label2, 1);
+	control->Add(jogDirection, 0, wxALL, 10);
+	control->Add(jogMode, 0, wxALL, 10);
+	wxButton *jog = new wxButton(window, -1, "Jog Indentor");
+	control->Add(jog, 0, wxALL, 10);
 	control->Add(cancel, 0, wxALL, 10);
 	cancel->Bind(wxEVT_BUTTON, &MyFrame::OnCancelButtonClicked, this);
 	control->Add(run, 0, wxALL, 10);
 	run->Bind(wxEVT_BUTTON, &MyFrame::OnRunButtonClicked, this);
+	jog->Bind(wxEVT_BUTTON, &MyFrame::OnJogButtonClicked, this);
 
 	//End of Control Buttons (not include setting button)
 
 	data->Add(control, 0, wxALIGN_BOTTOM);
 	topsizer->Add(settings, 0);
-	topsizer->Add(settings2, 0);
+	//topsizer->Add(settings2, 0);
 	topsizer->Add(data, 1, wxEXPAND);
 
 	window->SetSizerAndFit(topsizer);
@@ -315,13 +395,12 @@ MyFrame::~MyFrame()//GUI's destructor
 
 }
 
-wxThread::ExitCode MyFrame::Entry()//Background threads function
+wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 {
 	//Gets data for graph and chart
 	//Right now it internally creates a array of data that continually updates the graph since no finished prototype
 	//Also recieves serial input and then  updates the first cell of the chart with the data
-	wxThreadEvent evt(wxEVT_THREAD, myEVT_THREAD_UPDATE);
-	while (!GetThread()->TestDestroy()) {
+	while (!serial->TestDestroy()) {
 		if (IndentorMode == "StartUp"&&portMode=="Auto") {
 			try{
 				int error=RS232_OpenComport(port, bdrate, mode);
@@ -394,19 +473,19 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 				if (data[0] == "" || data[1] == "" || data[2] == "")
 					valid = false;
 				if (valid == true) {
-					m_data->AppendRows(1);
-					data[0].ToLong(&time);
-					vectorTime.push_back(((double)time/1000));
-					m_data->SetCellValue(row, 0, data[0]);
+					//m_data->AppendRows(1);
+					data[0].ToDouble(&value);
+					vectorTime.push_back(value/1000);
+					//m_data->SetCellValue(row, 0, data[0]);
 					data[1].ToDouble(&value);
 					vectorDisplacement.push_back(value);
-					m_data->SetCellValue(row, 1, data[1]);
+					//m_data->SetCellValue(row, 1, data[1]);
 					data[2].ToDouble(&value);
 					vectorForce.push_back(value);
-					m_data->SetCellValue(row, 2, data[2]);
-					vectorLayer->SetData(vectorTime, vectorDisplacement);
-					m_plot->Fit();
-					row++;
+					//m_data->SetCellValue(row, 2, data[2]);
+					//vectorLayer->SetData(vectorTime, vectorDisplacement);
+					//m_plot->Fit();
+					//row++;
 				}
 			}
 		}
@@ -422,43 +501,67 @@ wxThread::ExitCode MyFrame::Entry()//Background threads function
 			RS232_SendBuf(port, (unsigned char*)"$", 10);
 			IndentorMode = "Idle";
 		}
-		else {
-			RS232_flushRXTX(port);
+		else if (IndentorMode == "JOG") {
+			if (jogMode->GetSelection()==0 && jogDirection->GetSelection()==0) {
+				RS232_SendBuf(port, (unsigned char*)"JOG_SMA_UP", 10);
+			}
+			else if (jogMode->GetSelection() == 0 && jogDirection->GetSelection() == 1) {
+				RS232_SendBuf(port, (unsigned char*)"JOG_SMA_DO", 10);
+			}
+			else if (jogMode->GetSelection() == 1 && jogDirection->GetSelection() == 0) {
+				RS232_SendBuf(port, (unsigned char*)"JOG_MED_UP", 10);
+			}
+			else if (jogMode->GetSelection() == 1 && jogDirection->GetSelection() == 1) {
+				RS232_SendBuf(port, (unsigned char*)"JOG_MED_DO", 10);
+			}
+			else if (jogMode->GetSelection() == 2 && jogDirection->GetSelection() == 0) {
+				RS232_SendBuf(port, (unsigned char*)"JOG_LAR_UP", 10);
+			}
+			else if (jogMode->GetSelection() == 2 && jogDirection->GetSelection() == 1) {
+				RS232_SendBuf(port, (unsigned char*)"JOG_LAR_DO", 10);
+			}
+			IndentorMode = "Idle";
 		}
-		wxThread::Sleep(0);
+		else {
+			
+		}
 	}
 	return (wxThread::ExitCode)0;
 }
 
-void MyFrame::OnThreadUpdate(wxThreadEvent& evt)//GUI event for when background function updates
+wxThread::ExitCode MyFrame::EntryData()
 {
-	//Outputs data to graph
-	vectorLayer->SetData(vectorTime, vectorDisplacement);
-	m_plot->Fit();
+	while (!data->TestDestroy()) {
+		if ((vectorDisplacement.size() + 1) % 15 == 0 && notebook->GetSelection() == 0) {
+			vectorLayer->SetData(vectorTime, vectorDisplacement);
+			m_plot->Fit();
+		}else if ((vectorForce.size() + 1) % 15 == 0 && notebook->GetSelection() == 1) {
+			vectorLayer2->SetData(vectorTime, vectorForce);
+			m_plot2->Fit();
+		}else if ((vectorForce.size() + 1) % 15 == 0 && notebook->GetSelection() == 2) {
+			vectorLayer3->SetData(vectorDisplacement, vectorForce);
+			m_plot3->Fit();
+		}else if (row < vectorTime.size() && row < vectorDisplacement.size() && row < vectorForce.size()&&clearing==false) {
+			m_data->AppendRows(1);
+			m_data->SetCellValue(row, 0, wxString::Format("%f",vectorTime[row]));
+			m_data->SetCellValue(row, 1, wxString::Format("%f", vectorDisplacement[row]));
+			m_data->SetCellValue(row, 2, wxString::Format("%f", vectorForce[row]));
+			row++;
+		}
+	}
+	return (wxThread::ExitCode)0;
 }
 
 void MyFrame::OnClose(wxCloseEvent& event)//GUI close event
 {
 	//Closes thread and serial port
 	//Then closes GUI's window
-	if (GetThread() && GetThread()->IsRunning())
-		GetThread()->Wait();
+	if (serial && serial->IsRunning())
+		serial->Wait();
+	if (data && data->IsRunning())
+		data->Wait();
 	RS232_CloseComport(port);
 	Destroy();
-}
-
-void MyFrame::StartAlongTask()//Creates background thread
-{
-	if (CreateThread(wxTHREAD_JOINABLE) != wxTHREAD_NO_ERROR)
-	{
-		wxLogError("Could not create the worker thread!");
-		return;
-	}
-	if (GetThread()->Run() != wxTHREAD_NO_ERROR)
-	{
-		wxLogError("Could not run the worker thread!");
-		return;
-	}
 }
 
 void MyFrame::Show()//Function that makes GUI's window visable
@@ -471,14 +574,14 @@ void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button
 	//Retreives inputed settings and output them to the screen for confirmation
 	wxString settingValues = displacement->GetValue();
 	settingValues.Append("mm displacement \n");
-	settingValues.Append(frequency->GetValue());
-	settingValues.Append("Hz frequency \n");
+	//settingValues.Append(frequency->GetValue());
+	//settingValues.Append("Hz frequency \n");
 	settingValues.Append(cycles->GetValue());
 	settingValues.Append(" cycles \n");
-	settingValues.Append(force->GetValue());
-	settingValues.Append("N maximum force\n");
-	settingValues.Append(diameter->GetValue());
-	settingValues.Append("mm diameter tip");
+	//settingValues.Append(force->GetValue());
+	//settingValues.Append("N maximum force\n");
+	//settingValues.Append(diameter->GetValue());
+	//settingValues.Append("mm diameter tip");
 
 	if(wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL)==wxOK){
 		settings = "|";
@@ -498,11 +601,14 @@ void MyFrame::OnCancelButtonClicked(wxCommandEvent&)//On cancel button pressed
 void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button pressed
 {
 	if (settings != "|_\\") {
+		clearing = true;
+		dynamic_cast<indentorTable *>(m_data->GetTable())->EmptyGrid();
 		row = 0;
 		vectorTime.clear();
 		vectorDisplacement.clear();
 		vectorForce.clear();
-		dynamic_cast<indentorTable *>(m_data->GetTable())->EmptyGrid();
+		RS232_flushRX(port);
+		clearing = false;
 		IndentorMode = "START";
 	}
 	else {
@@ -510,6 +616,44 @@ void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button presse
 	}
 }
 
+//Serial thread functions
+wxThread* serialThread::StartAlongTaskSerial()//Creates background thread
+{
+	if (CreateThread(wxTHREAD_JOINABLE) != wxTHREAD_NO_ERROR)
+	{
+		wxLogError("Could not create the worker thread!");
+		return NULL;
+	}
+	if (GetThread()->Run() != wxTHREAD_NO_ERROR)
+	{
+		wxLogError("Could not run the worker thread!");
+		return NULL;
+	}
+	return GetThread();
+}
+
+void MyFrame::OnJogButtonClicked(wxCommandEvent&)//On cancel button pressed
+{
+	IndentorMode = "JOG";
+}
+
+//Data thread functions
+wxThread* dataThread::StartAlongTaskData()//Creates background thread
+{
+	if (CreateThread(wxTHREAD_JOINABLE) != wxTHREAD_NO_ERROR)
+	{
+		wxLogError("Could not create the worker thread!");
+		return NULL;
+	}
+	if (GetThread()->Run() != wxTHREAD_NO_ERROR)
+	{
+		wxLogError("Could not run the worker thread!");
+		return NULL;
+	}
+	return GetThread();
+}
+
+//App class
 class indentor_app : public wxApp//Creates app class
 {
 public:

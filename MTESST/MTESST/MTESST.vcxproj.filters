@@ -34,7 +34,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="icon.xpm">
+    <None Include="icon.XPM">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

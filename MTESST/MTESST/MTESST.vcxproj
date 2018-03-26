@@ -157,7 +157,7 @@
     <ClInclude Include="..\..\wxMathPlot-0.1.2\mathplot.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="icon.xpm" />
+    <None Include="icon.XPM" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
