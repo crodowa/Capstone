@@ -2430,19 +2430,19 @@ void mpFXYVector::SetData( const std::vector<double> &xs,const std::vector<doubl
     // Update internal variables for the bounding box.
     if (xs.size()>0)
     {
-        m_minX  = xs[0];
-        m_maxX  = xs[0];
-        m_minY  = ys[0];
-        m_maxY  = ys[0];
+        m_minX  = m_xs[0];
+        m_maxX  = m_xs[0];
+        m_minY  = m_ys[0];
+        m_maxY  = m_ys[0];
 
         std::vector<double>::const_iterator  it;
 
-        for (it=xs.begin();it!=xs.end();it++)
+        for (it=m_xs.begin();it!=m_xs.end();it++)
         {
             if (*it<m_minX) m_minX=*it;
             if (*it>m_maxX) m_maxX=*it;
         }
-        for (it=ys.begin();it!=ys.end();it++)
+        for (it=m_ys.begin();it!=m_ys.end();it++)
         {
             if (*it<m_minY) m_minY=*it;
             if (*it>m_maxY) m_maxY=*it;
