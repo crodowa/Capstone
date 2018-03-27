@@ -184,6 +184,7 @@ private:
 	wxThread* serial;
 	wxThread* data;
 	bool clearing = false;
+	bool updatePlots = false;
 
 	wxNotebook *notebook;
 	wxRadioBox *jogMode;
@@ -447,8 +448,9 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 			}
 		}
 		else if (IndentorMode == "Run") {
+			int amountSerialRecieved;
 			if(buff[0]!='|')
-				RS232_PollComport(port, buff, 1);
+				amountSerialRecieved=RS232_PollComport(port, buff, 1);
 			if (buff[0] == '|') {
 				int i = 0;
 				wxString data[3] = {};
@@ -456,7 +458,7 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 				double value;
 				bool valid = true;
 				do {
-					int amountSerialRecieved=RS232_PollComport(port, buff, 1);
+					amountSerialRecieved=RS232_PollComport(port, buff, 1);
 					if (amountSerialRecieved != 0) {
 						if (((buff[0] < 58 && buff[0]>28) || buff[0] == 46 || buff[0]==45) && i<3) {
 							data[i].Append(buff[0]);
@@ -473,20 +475,16 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 				if (data[0] == "" || data[1] == "" || data[2] == "")
 					valid = false;
 				if (valid == true) {
-					//m_data->AppendRows(1);
 					data[0].ToDouble(&value);
 					vectorTime.push_back(value/1000);
-					//m_data->SetCellValue(row, 0, data[0]);
 					data[1].ToDouble(&value);
 					vectorDisplacement.push_back(value);
-					//m_data->SetCellValue(row, 1, data[1]);
 					data[2].ToDouble(&value);
 					vectorForce.push_back(value);
-					//m_data->SetCellValue(row, 2, data[2]);
-					//vectorLayer->SetData(vectorTime, vectorDisplacement);
-					//m_plot->Fit();
-					//row++;
 				}
+			}
+			if (buff[0] == 'F' && amountSerialRecieved!=0) {
+				IndentorMode = "Finished";
 			}
 		}
 		else if (IndentorMode == "SendSettings") {
@@ -522,8 +520,12 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 			}
 			IndentorMode = "Idle";
 		}
+		else if(IndentorMode =="Finished") {
+			updatePlots = true;
+			IndentorMode = "Idle";
+		}
 		else {
-			
+
 		}
 	}
 	return (wxThread::ExitCode)0;
@@ -532,13 +534,21 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 wxThread::ExitCode MyFrame::EntryData()
 {
 	while (!data->TestDestroy()) {
-		if ((vectorDisplacement.size() + 1) % 15 == 0 && notebook->GetSelection() == 0) {
+		if (updatePlots==true) {
 			vectorLayer->SetData(vectorTime, vectorDisplacement);
 			m_plot->Fit();
-		}else if ((vectorForce.size() + 1) % 15 == 0 && notebook->GetSelection() == 1) {
 			vectorLayer2->SetData(vectorTime, vectorForce);
 			m_plot2->Fit();
-		}else if ((vectorForce.size() + 1) % 15 == 0 && notebook->GetSelection() == 2) {
+			vectorLayer3->SetData(vectorDisplacement, vectorForce);
+			m_plot3->Fit();
+			updatePlots = false;
+		}else if ((vectorDisplacement.size() + 1) % 50 == 0 && notebook->GetSelection() == 0) {
+			vectorLayer->SetData(vectorTime, vectorDisplacement);
+			m_plot->Fit();
+		}else if ((vectorForce.size() + 1) % 50 == 0 && notebook->GetSelection() == 1) {
+			vectorLayer2->SetData(vectorTime, vectorForce);
+			m_plot2->Fit();
+		}else if ((vectorForce.size() + 1) % 50 == 0 && notebook->GetSelection() == 2) {
 			vectorLayer3->SetData(vectorDisplacement, vectorForce);
 			m_plot3->Fit();
 		}else if (row < vectorTime.size() && row < vectorDisplacement.size() && row < vectorForce.size()&&clearing==false) {
