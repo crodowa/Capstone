@@ -5,12 +5,35 @@
 #include <wx/grid.h>
 
 #include<wx/numformatter.h>
+#include<wx/wfstream.h>
+#include<wx/txtstrm.h>
 
 #include <math.h>
 
 #include<rs232.h>
 
 #include "icon.xpm"
+
+enum
+{
+	Com1 = 200,
+	Com2,
+	Com3,
+	Com4,
+	Com5,
+	Com6,
+	Com7,
+	Com8,
+	Com9,
+	Com10,
+	Com11,
+	Com12,
+	Com13,
+	Com14,
+	Com15,
+	Com16,
+	Auto
+};
 
 //Indentor Table class
 class indentorTable : public wxGridTableBase
@@ -102,7 +125,7 @@ void indentorTable::SetColLabelValue(int numCol, const wxString& label)
 	if (numCol < columnLabels.size())
 		columnLabels[numCol] = label;
 }
-wxString indentorTable :: GetColLabelValue(int numCol)
+wxString indentorTable::GetColLabelValue(int numCol)
 {
 	return columnLabels[numCol];
 }
@@ -147,19 +170,21 @@ public:
 	~MyFrame();
 	void OnClose(wxCloseEvent& evt);
 	void StartAlongTask() {serial = StartAlongTaskSerial();data = StartAlongTaskData(); };
-	void Show();
 	void OnSettingButtonClicked(wxCommandEvent&);
 	void OnRunButtonClicked(wxCommandEvent&);
 	void OnCancelButtonClicked(wxCommandEvent&);
 	void OnJogButtonClicked(wxCommandEvent&);
+
+	void OnAutoCheck(wxCommandEvent& event);
+	void OnManualPortChange(wxCommandEvent& event);
+	void OnQuit(wxCommandEvent& WXUNUSED(event));
+	void OnSave(wxCommandEvent& WXUNUSED(event));
 protected:
 	virtual wxThread::ExitCode EntrySerial() wxOVERRIDE;
 	virtual wxThread::ExitCode EntryData() wxOVERRIDE;
-	wxDECLARE_EVENT_TABLE();
 
 private:
 	//Declare GUI's variables
-	wxFrame * window;
 	wxGrid* m_data;
 	mpWindow* m_plot;
 	mpWindow* m_plot2;
@@ -185,61 +210,92 @@ private:
 	wxThread* data;
 	bool clearing = false;
 	bool updatePlots = false;
+	bool serialConnected = false;
 
 	wxNotebook *notebook;
 	wxRadioBox *jogMode;
 	wxRadioBox *jogDirection;
+
+	wxMenuItem* ManualConnectionId;
+	wxMenuItem* IndentorConnectionId;
+
+	wxButton* settingButton;
+	wxButton* runButton;
+	wxButton* jogButton;
+
+	wxDECLARE_EVENT_TABLE();
 };
 
 //(indentor_app);
 //Create event table
 wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
+	EVT_MENU(Auto,MyFrame::OnAutoCheck)
+	EVT_MENU(wxID_EXIT, MyFrame::OnQuit)
+	EVT_MENU(wxID_SAVE,MyFrame::OnSave)
+	EVT_MENU(Com1, MyFrame::OnManualPortChange)
+	EVT_MENU(Com2, MyFrame::OnManualPortChange)
+	EVT_MENU(Com3, MyFrame::OnManualPortChange)
+	EVT_MENU(Com4, MyFrame::OnManualPortChange)
+	EVT_MENU(Com5, MyFrame::OnManualPortChange)
+	EVT_MENU(Com6, MyFrame::OnManualPortChange)
+	EVT_MENU(Com7, MyFrame::OnManualPortChange)
+	EVT_MENU(Com8, MyFrame::OnManualPortChange)
+	EVT_MENU(Com9, MyFrame::OnManualPortChange)
+	EVT_MENU(Com10, MyFrame::OnManualPortChange)
+	EVT_MENU(Com11, MyFrame::OnManualPortChange)
+	EVT_MENU(Com12, MyFrame::OnManualPortChange)
+	EVT_MENU(Com13, MyFrame::OnManualPortChange)
+	EVT_MENU(Com14, MyFrame::OnManualPortChange)
+	EVT_MENU(Com15, MyFrame::OnManualPortChange)
+	EVT_MENU(Com16, MyFrame::OnManualPortChange)
 	EVT_CLOSE(MyFrame::OnClose)
 wxEND_EVENT_TABLE()
 
-MyFrame::MyFrame()//GUI's constructor
+MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 750))//GUI's constructor
 {
-	window = new wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 750));
-	window->Fit();
+	this->Fit();
 	wxIcon *icon = new wxIcon(_521760424741);
-	window->SetIcon(*icon);
+	this->SetIcon(*icon);
 
 	//End of window creation
 
 	//Menu Creation
 	wxMenuBar* menuBar = new wxMenuBar();
 	wxMenu *fileMenu = new wxMenu();
-	fileMenu->Append(wxID_SAVE, _T("&Save"));
+	fileMenu->Append(wxID_SAVE, _T("&Save\tCtrl-S"));
 	fileMenu->AppendSeparator();
-	fileMenu->Append(wxID_EXIT, _T("&Quit"));
+	fileMenu->Append(wxID_EXIT, _T("&Quit\tAlt-F4"));
 	menuBar->Append(fileMenu, _T("&File"));
 	wxMenu *optionsMenu = new wxMenu();
 	wxMenu *IndentorConnection = new wxMenu();
-	IndentorConnection->Append(wxID_ANY,_T("Auto"));
+	IndentorConnection->AppendCheckItem(Auto,_T("&Auto"));
 	wxMenu *ManualConnection = new wxMenu();
-	ManualConnection->Append(wxID_ANY, _T("Com1"));
-	ManualConnection->Append(wxID_ANY, _T("Com2"));
-	ManualConnection->Append(wxID_ANY, _T("Com3"));
-	ManualConnection->Append(wxID_ANY, _T("Com4"));
-	ManualConnection->Append(wxID_ANY, _T("Com5"));
-	ManualConnection->Append(wxID_ANY, _T("Com6"));
-	ManualConnection->Append(wxID_ANY, _T("Com7"));
-	ManualConnection->Append(wxID_ANY, _T("Com8"));
-	ManualConnection->Append(wxID_ANY, _T("Com9"));
-	ManualConnection->Append(wxID_ANY, _T("Com10"));
-	ManualConnection->Append(wxID_ANY, _T("Com11"));
-	ManualConnection->Append(wxID_ANY, _T("Com12"));
-	ManualConnection->Append(wxID_ANY, _T("Com13"));
-	ManualConnection->Append(wxID_ANY, _T("Com14"));
-	ManualConnection->Append(wxID_ANY, _T("Com15"));
-	ManualConnection->Append(wxID_ANY, _T("Com16"));
-	IndentorConnection->AppendSubMenu(ManualConnection, _T("Manual"));
-	optionsMenu->AppendSubMenu(IndentorConnection,_T("&Indentor Connection"));
+	ManualConnection->AppendRadioItem(Com1, _T("Com1"));
+	ManualConnection->AppendRadioItem(Com2, _T("Com2"));
+	ManualConnection->AppendRadioItem(Com3, _T("Com3"));
+	ManualConnection->AppendRadioItem(Com4, _T("Com4"));
+	ManualConnection->AppendRadioItem(Com5, _T("Com5"));
+	ManualConnection->AppendRadioItem(Com6, _T("Com6"));
+	ManualConnection->AppendRadioItem(Com7, _T("Com7"));
+	ManualConnection->AppendRadioItem(Com8, _T("Com8"));
+	ManualConnection->AppendRadioItem(Com9, _T("Com9"));
+	ManualConnection->AppendRadioItem(Com10, _T("Com10"));
+	ManualConnection->AppendRadioItem(Com11, _T("Com11"));
+	ManualConnection->AppendRadioItem(Com12, _T("Com12"));
+	ManualConnection->AppendRadioItem(Com13, _T("Com13"));
+	ManualConnection->AppendRadioItem(Com14, _T("Com14"));
+	ManualConnection->AppendRadioItem(Com15, _T("Com15"));
+	ManualConnection->AppendRadioItem(Com16, _T("Com16"));
+	ManualConnectionId=IndentorConnection->AppendSubMenu(ManualConnection, _T("Manual"));
+	IndentorConnectionId=optionsMenu->AppendSubMenu(IndentorConnection,_T("&Indentor Connection"));
 	menuBar->Append(optionsMenu, _T("&Options"));
 	wxMenu *helpMenu = new wxMenu();
 	helpMenu->Append(wxID_ABOUT, _T("&About"));
 	menuBar->Append(helpMenu, _T("&Help"));
-	window->SetMenuBar(menuBar);
+	this->SetMenuBar(menuBar);
+
+	menuBar->Check(Auto, true);
+	ManualConnectionId->Enable(false);
 	//End of Menu
 
 
@@ -248,16 +304,16 @@ MyFrame::MyFrame()//GUI's constructor
 	//Settings
 	wxBoxSizer *settings = new wxBoxSizer(wxHORIZONTAL);
 
-	displacement = new wxTextCtrl(window, -1);
-	settings->Add(new wxStaticText(window, -1, "Enter Desired Displacement(mm):"), 0, wxALL, 12);
+	displacement = new wxTextCtrl(this, -1);
+	settings->Add(new wxStaticText(this, -1, "Enter Desired Displacement(mm):"), 0, wxALL, 12);
 	settings->Add(displacement, 0, wxALL, 10);
 
 	//frequency = new wxTextCtrl(window, -1);
 	//settings->Add(new wxStaticText(window, -1, "Enter Desired Frequency(Hz):"), 0, wxALL, 12);
 	//settings->Add(frequency, 0, wxALL, 10);
 
-	cycles = new wxTextCtrl(window, -1);
-	settings->Add(new wxStaticText(window, -1, "Enter Desired Number of Cycles:"), 0, wxALL, 12);
+	cycles = new wxTextCtrl(this, -1);
+	settings->Add(new wxStaticText(this, -1, "Enter Desired Number of Cycles:"), 0, wxALL, 12);
 	settings->Add(cycles, 0, wxALL, 10);
 
 	//wxBoxSizer *settings2 = new wxBoxSizer(wxHORIZONTAL);
@@ -270,15 +326,15 @@ MyFrame::MyFrame()//GUI's constructor
 	//settings2->Add(new wxStaticText(window, -1, "Enter Tip Diameter(mm):       "), 0, wxALL, 12);
 	//settings2->Add(diameter, 0, wxALL, 10);
 
-	wxButton *settingsbut = new wxButton(window, -1, "Enter Settings");
+	settingButton = new wxButton(this, -1, "Enter Settings");
 	//settings2->Add(settingsbut, 0, wxALL, 10);
-	settings->Add(settingsbut, 0, wxALL, 10);
-	settingsbut->Bind(wxEVT_BUTTON, &MyFrame::OnSettingButtonClicked, this);
+	settings->Add(settingButton, 0, wxALL, 10);
+	settingButton->Bind(wxEVT_BUTTON, &MyFrame::OnSettingButtonClicked, this);
 	//End of settings
 
 	//Start of Graph and text panel
 	//wxNotebook *notebook = new wxNotebook(window, wxID_ANY);
-	notebook = new wxNotebook(window, wxID_ANY);
+	notebook = new wxNotebook(this, wxID_ANY);
 	wxBoxSizer *data = new wxBoxSizer(wxHORIZONTAL);
 
 	//Displacement vs Time
@@ -367,19 +423,19 @@ MyFrame::MyFrame()//GUI's constructor
 	static const wxString label[] = { "Up","Down"};
 	static const wxString label2[] = { "0.01mm","0.1mm","1mm" };
 	wxBoxSizer *control = new wxBoxSizer(wxVERTICAL);
-	wxButton *cancel = new wxButton(window, -1, "Cancel");
-	wxButton *run = new wxButton(window, -1, "Run");
-	jogDirection= new wxRadioBox(window, -1, "Jog Direction", wxDefaultPosition, wxDefaultSize, 2, label, 1);
-	jogMode = new wxRadioBox(window, -1, "Jog Step", wxDefaultPosition, wxDefaultSize, 3, label2, 1);
+	wxButton *cancel = new wxButton(this, -1, "Cancel");
+	runButton = new wxButton(this, -1, "Run");
+	jogDirection= new wxRadioBox(this, -1, "Jog Direction", wxDefaultPosition, wxDefaultSize, 2, label, 1);
+	jogMode = new wxRadioBox(this, -1, "Jog Step", wxDefaultPosition, wxDefaultSize, 3, label2, 1);
 	control->Add(jogDirection, 0, wxALL, 10);
 	control->Add(jogMode, 0, wxALL, 10);
-	wxButton *jog = new wxButton(window, -1, "Jog Indentor");
-	control->Add(jog, 0, wxALL, 10);
+	jogButton = new wxButton(this, -1, "Jog Indentor");
+	control->Add(jogButton, 0, wxALL, 10);
 	control->Add(cancel, 0, wxALL, 10);
 	cancel->Bind(wxEVT_BUTTON, &MyFrame::OnCancelButtonClicked, this);
-	control->Add(run, 0, wxALL, 10);
-	run->Bind(wxEVT_BUTTON, &MyFrame::OnRunButtonClicked, this);
-	jog->Bind(wxEVT_BUTTON, &MyFrame::OnJogButtonClicked, this);
+	control->Add(runButton, 0, wxALL, 10);
+	runButton->Bind(wxEVT_BUTTON, &MyFrame::OnRunButtonClicked, this);
+	jogButton->Bind(wxEVT_BUTTON, &MyFrame::OnJogButtonClicked, this);
 
 	//End of Control Buttons (not include setting button)
 
@@ -388,7 +444,7 @@ MyFrame::MyFrame()//GUI's constructor
 	//topsizer->Add(settings2, 0);
 	topsizer->Add(data, 1, wxEXPAND);
 
-	window->SetSizerAndFit(topsizer);
+	this->SetSizerAndFit(topsizer);
 }
 
 MyFrame::~MyFrame()//GUI's destructor
@@ -416,6 +472,7 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 					} while (serialReturned == 0 && wxGetLocalTimeMillis()-time<2000);
 					if (buff[0] ==(unsigned char) '1') {
 						RS232_SendBuf(port,(unsigned char *)"1",1);
+						serialConnected = true;
 						IndentorMode = "Idle";
 					}
 					else {
@@ -440,6 +497,8 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 					throw std::exception();
 				}
 				else {
+					RS232_SendBuf(port, (unsigned char *)"1", 1);
+					serialConnected = true;
 					IndentorMode = "Idle";
 				}
 			}
@@ -460,7 +519,7 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 				do {
 					amountSerialRecieved=RS232_PollComport(port, buff, 1);
 					if (amountSerialRecieved != 0) {
-						if (((buff[0] < 58 && buff[0]>28) || buff[0] == 46 || buff[0]==45) && i<3) {
+						if (((buff[0] < 58 && buff[0]>47) || buff[0] == 46 || buff[0]==45) && i<3) {
 							data[i].Append(buff[0]);
 						}
 						else if (buff[0] == '_') {
@@ -522,6 +581,10 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 		}
 		else if(IndentorMode =="Finished") {
 			updatePlots = true;
+			runButton->Enable(true);
+			settingButton->Enable(true);
+			jogButton->Enable(true);
+			IndentorConnectionId->Enable(true);
 			IndentorMode = "Idle";
 		}
 		else {
@@ -567,16 +630,13 @@ void MyFrame::OnClose(wxCloseEvent& event)//GUI close event
 	//Closes thread and serial port
 	//Then closes GUI's window
 	if (serial && serial->IsRunning())
-		serial->Wait();
+		serial->Delete();
 	if (data && data->IsRunning())
-		data->Wait();
+		data->Delete();
+	if(IndentorMode=="Run")
+		RS232_SendBuf(port, (unsigned char*)"$", 10);
 	RS232_CloseComport(port);
 	Destroy();
-}
-
-void MyFrame::Show()//Function that makes GUI's window visable
-{
-	window->Show();
 }
 
 void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button press
@@ -592,20 +652,70 @@ void MyFrame::OnSettingButtonClicked(wxCommandEvent&)//Event for settings button
 	//settingValues.Append("N maximum force\n");
 	//settingValues.Append(diameter->GetValue());
 	//settingValues.Append("mm diameter tip");
-
-	if(wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL)==wxOK){
+	if (serialConnected == false) {
+		wxMessageBox("No Indentor Connected", "Error", wxOK | wxICON_ERROR);
+	}
+	else if(wxMessageBox(settingValues, "Settings Entered", wxOK | wxCANCEL)==wxOK){
+		wxString numCycle = cycles->GetValue();
+		wxString DesiredDisplacement = displacement->GetValue();
+		int numDecimalPoints = 0;
+		bool valid = true;
 		settings = "|";
-		settings.Append(cycles->GetValue());
+		for (int i = 0; i < numCycle.size(); i++)
+		{
+			if (numCycle[i] < 58 && numCycle[i]>47 && numCycle.size()<6)
+			{
+				settings.Append(numCycle[i]);
+			}
+			else {
+				valid = false;
+				break;
+			}
+		}
 		settings.Append("_");
-		settings.Append(displacement->GetValue());
-		settings.Append("\\");
-		IndentorMode = "SendSettings";
+		for (int i = 0; i < DesiredDisplacement.size(); i++)
+		{
+			if (((DesiredDisplacement[i] < 58 && DesiredDisplacement[i]>47)|| DesiredDisplacement[i]==46) && DesiredDisplacement.size()<6)
+			{
+				if (DesiredDisplacement[i] == 46)
+					numDecimalPoints++;
+				if (numDecimalPoints > 1)
+				{
+					valid = false;
+					break;
+				}
+				settings.Append(DesiredDisplacement[i]);
+			}
+			else {
+				valid = false;
+				break;
+			}
+		}
+		if (numCycle.size() == 0 || DesiredDisplacement.size() == 0) {
+			valid = false;
+		}
+		if (valid == true) {
+			settings.Append("\\");
+			IndentorMode = "SendSettings";
+		}
+		else {
+			wxMessageBox("Invalid Settings", "Error", wxOK | wxICON_ERROR);
+		}
 	}
 }
 
 void MyFrame::OnCancelButtonClicked(wxCommandEvent&)//On cancel button pressed
 {
-	IndentorMode = "STOP";
+	if (serialConnected == false) {
+		wxMessageBox("No Indentor Connected", "Error", wxOK | wxICON_ERROR);
+	}
+	else {
+		IndentorMode = "STOP";
+	}
+	runButton->Enable(true);
+	settingButton->Enable(true);
+	jogButton->Enable(true);
+	IndentorConnectionId->Enable(true);
 }
 
 void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button pressed
@@ -619,10 +729,191 @@ void MyFrame::OnRunButtonClicked(wxCommandEvent&)//Event for start button presse
 		vectorForce.clear();
 		RS232_flushRX(port);
 		clearing = false;
+		runButton->Enable(false);
+		settingButton->Enable(false);
+		jogButton->Enable(false);
+		IndentorConnectionId->Enable(false);
 		IndentorMode = "START";
+	}
+	else if (serialConnected == false) {
+		wxMessageBox("No Indentor Connected", "Error", wxOK | wxICON_ERROR);
 	}
 	else {
 		wxMessageBox("Please Enter Valid Settings", "Error", wxOK|wxICON_ERROR);
+	}
+}
+
+void MyFrame::OnAutoCheck(wxCommandEvent& event)
+{
+	if (event.IsChecked()) {
+		if(serialConnected==true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		portMode = "Auto";
+		IndentorMode = "StartUp";
+		ManualConnectionId->Enable(false);
+	}
+	else {
+		portMode = "Manual";
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		ManualConnectionId->Enable(true);
+	}
+}
+
+void MyFrame::OnQuit(wxCommandEvent& WXUNUSED(event)) {
+	if (serial && serial->IsRunning())
+		serial->Delete();
+	if (data && data->IsRunning())
+		data->Delete();
+	RS232_CloseComport(port);
+	Destroy();
+}
+
+void MyFrame::OnManualPortChange(wxCommandEvent& event) {
+	switch (event.GetId()) {
+	case Com1:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 0;
+		break;
+	case Com2:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 1;
+		break;
+	case Com3:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 2;
+		break;
+	case Com4:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 3;
+		break;
+	case Com5:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 4;
+		break;
+	case Com6:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 5;
+		break;
+	case Com7:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 6;
+		break;
+	case Com8:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 7;
+		break;
+	case Com9:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 8;
+		break;
+	case Com10:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 9;
+		break;
+	case Com11:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 10;
+		break;
+	case Com12:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 11;
+		break;
+	case Com13:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 12;
+		break;
+	case Com14:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 13;
+		break;
+	case Com15:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 14;
+		break;
+	case Com16:
+		if (serialConnected == true)
+			RS232_CloseComport(port);
+		serialConnected = false;
+		IndentorMode = "StartUp";
+		port = 15;
+		break;
+	}
+}
+
+void MyFrame::OnSave(wxCommandEvent& WXUNUSED(event))
+{
+	wxFileDialog saveFile(this, _T("Save"), "", "TestData", "CSV Files (*.csv)|*.csv", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if (saveFile.ShowModal() == wxID_CANCEL)
+		return;
+	wxFileOutputStream File(saveFile.GetPath());
+	if (!File.IsOk())
+	{
+		wxLogError("Cannot save current contents in file '%s' .", saveFile.GetPath());
+		return;
+	}
+	wxTextOutputStream data(File);
+	data << "Time,Displacement,Force" << endl;
+	for (int i = 0; i < vectorTime.size(); i++) {
+		data << vectorTime[i] << ',' << vectorDisplacement[i] << ',' << vectorForce[i] << endl;
+	}
+	File.Close();
+}
+
+void MyFrame::OnJogButtonClicked(wxCommandEvent&)//On cancel button pressed
+{
+	if (serialConnected == false) {
+		wxMessageBox("No Indentor Connected", "Error", wxOK | wxICON_ERROR);
+	}
+	else {
+		IndentorMode = "JOG";
 	}
 }
 
@@ -640,11 +931,6 @@ wxThread* serialThread::StartAlongTaskSerial()//Creates background thread
 		return NULL;
 	}
 	return GetThread();
-}
-
-void MyFrame::OnJogButtonClicked(wxCommandEvent&)//On cancel button pressed
-{
-	IndentorMode = "JOG";
 }
 
 //Data thread functions
@@ -671,10 +957,10 @@ public:
 	{
 		//Creates GUI and opens serial port and creates background thread
 		MyFrame* frame = new MyFrame();
-		frame->Show();
+		frame->Show(true);
 		frame->StartAlongTask();
 		return true;
 	}
 };
 
-IMPLEMENT_APP(indentor_app);
+wxIMPLEMENT_APP(indentor_app);
