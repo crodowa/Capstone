@@ -175,6 +175,7 @@ public:
 	void OnCancelButtonClicked(wxCommandEvent&);
 	void OnJogButtonClicked(wxCommandEvent&);
 
+	void OnAbout(wxCommandEvent&);
 	void OnAutoCheck(wxCommandEvent& event);
 	void OnManualPortChange(wxCommandEvent& event);
 	void OnQuit(wxCommandEvent& WXUNUSED(event));
@@ -194,8 +195,10 @@ private:
 	mpFXYVector* vectorLayer2;
 	mpFXYVector* vectorLayer3;
 	wxTextCtrl *displacement;
+	wxStaticText *displacementText;
 	wxTextCtrl *frequency;
 	wxTextCtrl *cycles;
+	wxStaticText *cyclesText;
 	wxTextCtrl *force;
 	wxTextCtrl *diameter;
 	wxString IndentorMode ="StartUp";
@@ -232,6 +235,7 @@ wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
 	EVT_MENU(Auto,MyFrame::OnAutoCheck)
 	EVT_MENU(wxID_EXIT, MyFrame::OnQuit)
 	EVT_MENU(wxID_SAVE,MyFrame::OnSave)
+	EVT_MENU(wxID_ABOUT, MyFrame::OnAbout)
 	EVT_MENU(Com1, MyFrame::OnManualPortChange)
 	EVT_MENU(Com2, MyFrame::OnManualPortChange)
 	EVT_MENU(Com3, MyFrame::OnManualPortChange)
@@ -253,9 +257,12 @@ wxEND_EVENT_TABLE()
 
 MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 750))//GUI's constructor
 {
+	SetBackgroundColour(wxColor(75, 75, 75));
 	this->Fit();
 	wxIcon *icon = new wxIcon(_521760424741);
 	this->SetIcon(*icon);
+	wxIcon *AAAAAicon = new wxIcon(wxT("IDI_ICON1"));
+	this->SetIcon(*AAAAAicon);
 
 	//End of window creation
 
@@ -305,7 +312,15 @@ MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 75
 	wxBoxSizer *settings = new wxBoxSizer(wxHORIZONTAL);
 
 	displacement = new wxTextCtrl(this, -1);
-	settings->Add(new wxStaticText(this, -1, "Enter Desired Displacement(mm):"), 0, wxALL, 12);
+
+	displacementText = new wxStaticText(this, -1, "Enter Desired Displacement(mm):");
+	displacementText->SetForegroundColour(*wxWHITE);
+	wxFont displacementTextfont = displacementText->GetFont();
+	displacementTextfont.SetPointSize(10);
+	displacementTextfont.SetWeight(wxFONTWEIGHT_BOLD);
+	displacementText->SetFont(displacementTextfont);
+
+	settings->Add(displacementText, 0, wxALL, 12);
 	settings->Add(displacement, 0, wxALL, 10);
 
 	//frequency = new wxTextCtrl(window, -1);
@@ -313,7 +328,14 @@ MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 75
 	//settings->Add(frequency, 0, wxALL, 10);
 
 	cycles = new wxTextCtrl(this, -1);
-	settings->Add(new wxStaticText(this, -1, "Enter Desired Number of Cycles:"), 0, wxALL, 12);
+	cyclesText = new wxStaticText(this, -1, "Enter Desired Number of Cycles:");
+	cyclesText->SetForegroundColour(*wxWHITE);
+	wxFont cyclesTextfont = cyclesText->GetFont();
+	cyclesTextfont.SetPointSize(10);
+	cyclesTextfont.SetWeight(wxFONTWEIGHT_BOLD);
+	cyclesText->SetFont(cyclesTextfont);
+
+	settings->Add(cyclesText, 0, wxALL, 12);
 	settings->Add(cycles, 0, wxALL, 10);
 
 	//wxBoxSizer *settings2 = new wxBoxSizer(wxHORIZONTAL);
@@ -327,6 +349,11 @@ MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 75
 	//settings2->Add(diameter, 0, wxALL, 10);
 
 	settingButton = new wxButton(this, -1, "Enter Settings");
+	wxFont settingButtonfont = settingButton->GetFont();
+	settingButtonfont.SetPointSize(10);
+	settingButtonfont.SetWeight(wxFONTWEIGHT_BOLD);
+	settingButton->SetFont(settingButtonfont);
+
 	//settings2->Add(settingsbut, 0, wxALL, 10);
 	settings->Add(settingButton, 0, wxALL, 10);
 	settingButton->Bind(wxEVT_BUTTON, &MyFrame::OnSettingButtonClicked, this);
@@ -335,6 +362,11 @@ MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 75
 	//Start of Graph and text panel
 	//wxNotebook *notebook = new wxNotebook(window, wxID_ANY);
 	notebook = new wxNotebook(this, wxID_ANY);
+	wxFont notebookfont = notebook->GetFont();
+	notebookfont.SetPointSize(10);
+	notebookfont.SetWeight(wxFONTWEIGHT_BOLD);
+	notebook->SetFont(notebookfont);
+
 	wxBoxSizer *data = new wxBoxSizer(wxHORIZONTAL);
 
 	//Displacement vs Time
@@ -354,7 +386,7 @@ MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 75
 
 	vectorLayer->SetData(vectorTime, vectorDisplacement);
 	vectorLayer->SetContinuity(true);
-	wxPen vectorpen(*wxBLUE, 2, wxSOLID);
+	wxPen vectorpen(*wxRED, 1, wxSOLID);
 	vectorLayer->SetPen(vectorpen);
 	vectorLayer->SetDrawOutsideMargins(false);
 
@@ -423,17 +455,48 @@ MyFrame::MyFrame():wxFrame(NULL, -1, "MTESST", wxDefaultPosition, wxSize(700, 75
 	static const wxString label[] = { "Up","Down"};
 	static const wxString label2[] = { "0.01mm","0.1mm","1mm" };
 	wxBoxSizer *control = new wxBoxSizer(wxVERTICAL);
+
 	wxButton *cancel = new wxButton(this, -1, "Cancel");
+	wxFont cancelfont = cancel->GetFont();
+	cancelfont.SetPointSize(10);
+	cancelfont.SetWeight(wxFONTWEIGHT_BOLD);
+	cancel->SetFont(cancelfont);
+
 	runButton = new wxButton(this, -1, "Run");
+	wxFont runButtonfont = runButton->GetFont();
+	runButtonfont.SetPointSize(10);
+	runButtonfont.SetWeight(wxFONTWEIGHT_BOLD);
+	runButton->SetFont(runButtonfont);
+
 	jogDirection= new wxRadioBox(this, -1, "Jog Direction", wxDefaultPosition, wxDefaultSize, 2, label, 1);
+	jogDirection->SetForegroundColour(*wxWHITE);
+	this->Refresh();
+	wxFont jogDirectionfont = jogDirection->GetFont();
+	jogDirectionfont.SetPointSize(10);
+	jogDirectionfont.SetWeight(wxFONTWEIGHT_BOLD);
+	jogDirection->SetFont(jogDirectionfont);
+	
 	jogMode = new wxRadioBox(this, -1, "Jog Step", wxDefaultPosition, wxDefaultSize, 3, label2, 1);
-	control->Add(jogDirection, 0, wxALL, 10);
-	control->Add(jogMode, 0, wxALL, 10);
+	jogMode->SetForegroundColour(*wxWHITE);
+	this->Refresh();
+	wxFont jogModefont = jogMode->GetFont();
+	jogModefont.SetPointSize(10);
+	jogModefont.SetWeight(wxFONTWEIGHT_BOLD);
+	jogMode->SetFont(jogModefont);
+
+	control->Add(jogDirection, 0, wxEXPAND | wxALL, 10);
+	control->Add(jogMode, 0, wxEXPAND | wxALL, 10);
+	
 	jogButton = new wxButton(this, -1, "Jog Indentor");
+	wxFont jogButtonfont = jogButton->GetFont();
+	jogButtonfont.SetPointSize(10);
+	jogButtonfont.SetWeight(wxFONTWEIGHT_BOLD);
+	jogButton->SetFont(jogButtonfont);
+	
 	control->Add(jogButton, 0, wxALL, 10);
-	control->Add(cancel, 0, wxALL, 10);
+	control->Add(cancel, 0, wxEXPAND | wxALL, 10);
 	cancel->Bind(wxEVT_BUTTON, &MyFrame::OnCancelButtonClicked, this);
-	control->Add(runButton, 0, wxALL, 10);
+	control->Add(runButton, 0, wxEXPAND | wxALL, 10);
 	runButton->Bind(wxEVT_BUTTON, &MyFrame::OnRunButtonClicked, this);
 	jogButton->Bind(wxEVT_BUTTON, &MyFrame::OnJogButtonClicked, this);
 
@@ -588,7 +651,7 @@ wxThread::ExitCode MyFrame::EntrySerial()//Background threads function
 			IndentorMode = "Idle";
 		}
 		else {
-
+			wxThread::Sleep(500);
 		}
 	}
 	return (wxThread::ExitCode)0;
@@ -620,6 +683,8 @@ wxThread::ExitCode MyFrame::EntryData()
 			m_data->SetCellValue(row, 1, wxString::Format("%f", vectorDisplacement[row]));
 			m_data->SetCellValue(row, 2, wxString::Format("%f", vectorForce[row]));
 			row++;
+		}else if (IndentorMode == "Idle") {
+			wxThread::Sleep(500);
 		}
 	}
 	return (wxThread::ExitCode)0;
@@ -900,11 +965,16 @@ void MyFrame::OnSave(wxCommandEvent& WXUNUSED(event))
 		return;
 	}
 	wxTextOutputStream data(File);
-	data << "Time,Displacement,Force" << endl;
+	//data << "Time,Displacement,Force" << endl;
 	for (int i = 0; i < vectorTime.size(); i++) {
 		data << vectorTime[i] << ',' << vectorDisplacement[i] << ',' << vectorForce[i] << endl;
 	}
 	File.Close();
+}
+
+void MyFrame::OnAbout(wxCommandEvent&)
+{
+	wxMessageBox("Created by Ethan Kirkland, Jovan Latkovic, \nChristopher Rodowa, and Julian Zane \n© 2018 MTESST Team", "About", wxOK | wxICON_INFORMATION);
 }
 
 void MyFrame::OnJogButtonClicked(wxCommandEvent&)//On cancel button pressed

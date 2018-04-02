@@ -155,9 +155,16 @@
   <ItemGroup>
     <ClInclude Include="..\..\RS-232\rs232.h" />
     <ClInclude Include="..\..\wxMathPlot-0.1.2\mathplot.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="icon.XPM" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
